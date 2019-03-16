@@ -1,37 +1,45 @@
-#ifndef Coms.h
-#define Coms.h
+#ifndef Coms_h
+#define Coms_h
 
 // Internal Comms
 
 // Message
 typedef struct {
-    int id;          /* Who is sending msg*/
-    int    currState;    /* AD result of measured voltage */
-    int    orState;      /* AD result of measured current */
-    uint32_t counter;    /* A counter value               */
+    int num;          /* Who is sending msg*/
+//    int    currState;    /* AD result of measured voltage */
+//    int    orState;      /* AD result of measured current */
+//    uint32_t counter;    /* A counter value               */
+    char* body;
+    uint64_t keyP;
 } msg_t;
 
-Mail<msg_t, 16> msg_box;
+Mail<msg_t, 256> msg_box;
 
 void Receiver(){
     while (true) {
         osEvent evt = msg_box.get();
         if (evt.status == osEventMail) {
             msg_t *msg = (msg_t*)evt.value.p;
-            pc.printf("\nHi!, My name is %d\n\r", msg->id);
+//            pc.printf("\nHi!, My name is \n\r");
+            char* texttt = msg->body;
+            int num = msg->num;
+            uint64_t keyP = msg->keyP;
+            pc.printf("%d %s %llu\n", num, texttt, keyP);
             
             msg_box.free(msg);
         }
     }
 }
 
-void putMessage(int id, int voltage, int current, uint32_t counter) {
+
+void putMessage(int n, char* s, uint64_t keyP){
+    pc.printf(" "); // DO NOT REMOVE - it solves a problem 
+    pc.printf(" "); // DO NOT REMOVE - it solves a problem
     msg_t *msg = msg_box.alloc();
-    msg->id = id;
-    msg->currState = voltage;
-    msg->orState = current;
-    msg->counter = counter;
-    msg_box.put(msg);
+    msg->num = n;
+    msg->body = s;
+    msg->keyP = keyP;
+    msg_box.put(msg);   
 }
 
 
@@ -69,18 +77,35 @@ void decodeSerialInput(){
     
     char instr = command[0];
     switch (instr){
+        case 'a' : 
+        case 'A' : {
+            putMessage(0, "--- IN A\n\r", 0);
+            string input= command.substr(1);
+            float torque = atof(input.c_str());
+            if (torque >= 0 ) {
+                lead = 2;
+                pwm_out = torque;}
+            else {
+                lead = -2;
+                pwm_out = -torque;}
+            break;}
+        
         case 'r' :
         case 'R' :{
-            string revs = command.substr(2);
-            revs = atof(revs.c_str());
-//            Rotate(revs);
+            putMessage(0, "--- IN R\n\r", 0);
+            string input = command.substr(1);
+            float revs = atof(input.c_str());
+            Rotate(revs);
+            putMessage(0, "---Revs set---\n\r", 0);
             break;}
 
         case 'v' : 
         case 'V' : {
-            string speed = command.substr(1);
-            speed = atof(speed.c_str());
-//            MaxSpeed(speed);
+            pc.printf("Finished typing");
+            string input = command.substr(1);
+            int speed = atof(input.c_str());
+            set_velocity(speed);
+            pc.printf("--Velocity set--");
             break;}
 
         case 'k' :
@@ -109,3 +134,4 @@ void decodeSerialInput(){
 
 
 #endif
+
