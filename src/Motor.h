@@ -181,19 +181,12 @@ void motorCtrlFn(){
             T = std::max(TempTr, TempTs);
             pwm_out.write(T/100);
             }
-//        motorCount++;
-//        if(motorCount == 10){
-//             putMessage((int)(velocity)," revs/sec\n\r",1);
-//             motorCount =0;
-//        }
     }
 }
 
 // BUG TO FIX --> pwm_out goes back to max value after this function
 void set_velocity(){
    
-    //if(glob_target_speed > 0) lead = 2;
-//    else lead = -2;
     float velocity;
     Ticker statusPrintTicker;
     photoISR();
@@ -204,8 +197,8 @@ void set_velocity(){
     float sign;
     float timeStep = 0.1; //used for integral scaling
     float tempTs;
-//    while (vel != glob_target_speed){
-      while(1){  
+
+    while(1){  
         core_util_critical_section_enter();
         velocity = vel;
         core_util_critical_section_exit();
@@ -227,18 +220,8 @@ void set_velocity(){
         core_util_critical_section_enter();
         Ts = tempTs;
          core_util_critical_section_exit(); 
-       // if(Ts > 0.0){
-//            lead = 2;
-//            pwm_out.write( (float)(std::min((float)Ts, (float)100.0)/(float)100.0) );
-//        } else {
-//            lead = -2;
-//            pwm_out.write( (float)(std::min((float)abs(Ts), (float)100)/(float)100) );
-//        }
         
     }
-    
-    
-    putMessage(0,"------ Velocity Reached",0);
     
 }
 
@@ -264,7 +247,7 @@ void Rotate(){
     int currRevs = 0;
     bool targetMet = false;
     float tempTr;
-    //while(!targetMet){
+
     while(1){
         core_util_critical_section_enter();
         velocity = vel;
@@ -276,10 +259,7 @@ void Rotate(){
         core_util_critical_section_enter();
         Tr = tempTr;
         core_util_critical_section_exit();
-        //float out = (float)std::min((float)Tr, (float)100.0);
-        //targetMet = abs(targetRevs) <= abs(currRevs);
     }   
-        putMessage(currRevs," --> currRevs\n\r",0);
         
     }
 
