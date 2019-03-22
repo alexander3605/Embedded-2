@@ -40,8 +40,10 @@ PwmOut pwm_out(PWMpin);
 
 //Drive state to output table
 const int8_t driveTable[] = {0x12,0x18,0x09,0x21,0x24,0x06,0x00,0x00};
-int Tr = 0;
-int Ts = 0; 
+float Tr = 0;
+float Ts = 0; 
+float glob_target_speed;
+
 //Mapping from interrupter inputs to sequential rotor states. 0x00 and 0x07 are not valid
 const int8_t stateMap[] = {0x07,0x05,0x03,0x04,0x01,0x00,0x02,0x07};  
 //const int8_t stateMap[] = {0x07,0x01,0x03,0x02,0x05,0x00,0x04,0x07}; //Alternative if phase order of input or drive is reversed
@@ -137,6 +139,7 @@ int8_t motorHome() {
 
 void motorCtrlTick(){
     motorCtrlT.signal_set(0x1);
+   
 }
 
 /// print number of revolutions, called every sec
@@ -145,22 +148,39 @@ void printRevs(){
     putMessage(revsCount - old_revsCount, " revs/sec\n\r", 0);
     putMessage(Ts, " Ts\n\r", 0);
     old_revsCount = revsCount;
+ 
 }
 
 void motorCtrlFn(){
     int oldPos = 0;
+    float TempTr, TempTs, TempVel;
     Ticker motorCtrlTicker; 
     motorCtrlTicker.attach_us(&motorCtrlTick,50000);
     Ticker statusPrintTicker;
-    statusPrintTicker.attach_us(&printRevs,1000000);
+    //statusPrintTicker.attach_us(&printRevs,1000000); // --> UNCOMMENT TO PRINT ROTATION SPEED
     int motorCount = 0;
+    int position;
+    float T;
     while(1){
         motorCtrlT.signal_wait(0x1);
+        
         core_util_critical_section_enter();
-        int position = revsCount;
+        TempTs = Ts;
+        TempTr = Tr;
+        position = revsCount;
+        vel = 20* (position - oldPos);
+        TempVel = vel;
         core_util_critical_section_exit();
-        velocity = 20* (position - oldPos);
+        
         oldPos=position;
+        if(TempVel >= 0){
+            T = std::min(TempTr,TempTs);
+            pwm_out.write(T/100);
+            }
+        else{
+            T = std::max(TempTr, TempTs);
+            pwm_out.write(T/100);
+            }
 //        motorCount++;
 //        if(motorCount == 10){
 //             putMessage((int)(velocity)," revs/sec\n\r",1);
@@ -170,69 +190,95 @@ void motorCtrlFn(){
 }
 
 // BUG TO FIX --> pwm_out goes back to max value after this function
-void set_velocity(int target_speed){
-    if(!target_speed) {
-        pwm_out.write(1);
-        return;}
-    if(target_speed > 0) lead = 2;
-    else lead = -2;
-     
+void set_velocity(){
+   
+    //if(glob_target_speed > 0) lead = 2;
+//    else lead = -2;
+    float velocity;
     Ticker statusPrintTicker;
     photoISR();
-    int Kps = 5; //Experimentally-defined constant
-    int Kis = 2; //Experimentally-defined constant
+    float Kps = 5.4; //Experimentally-defined constant
+    float Kis = 1.8; //Experimentally-defined constant
     float es_integral = 0;
     float es;
-    int sign;
-    float timeStep = 1; //used for integral scaling
-    while (velocity != target_speed){
+    float sign;
+    float timeStep = 0.1; //used for integral scaling
+    float tempTs;
+//    while (vel != glob_target_speed){
+      while(1){  
+        core_util_critical_section_enter();
+        velocity = vel;
+        core_util_critical_section_exit();
+        
+        if (!vel){
+            core_util_critical_section_enter();
+           Ts=0; 
+           Tr=0;
+             core_util_critical_section_exit();
+            }
         sign = 1;
-        // TODO: add wait for timeStep
-        // -- insert code --
-        es = target_speed - abs(velocity);
+        // add wait for timeStep to count integral unit
+        wait(timeStep);
+        es = glob_target_speed - abs(velocity);
         if(es < 0) sign = -1;
         es_integral += es * timeStep;
-        Ts = (Kps * es  +  Kis * es_integral) * sign;
-         
-        if(Ts > 0){
-            lead = 2;
-            pwm_out.write( (float)(std::min(Ts, 100)/100) );
-        } else {
-            lead = -2;
-            pwm_out.write( (float)(std::min(abs(Ts), 100)/100) );
-        }
+       
+        tempTs = (Kps * es  +  Kis * es_integral) * sign;
+        core_util_critical_section_enter();
+        Ts = tempTs;
+         core_util_critical_section_exit(); 
+       // if(Ts > 0.0){
+//            lead = 2;
+//            pwm_out.write( (float)(std::min((float)Ts, (float)100.0)/(float)100.0) );
+//        } else {
+//            lead = -2;
+//            pwm_out.write( (float)(std::min((float)abs(Ts), (float)100)/(float)100) );
+//        }
+        
     }
+    
+    
+    putMessage(0,"------ Velocity Reached",0);
+    
 }
 
 
-void Rotate(float revs){
+void Rotate(){
     // check rotation direction
+    float tempRevs;
+    core_util_critical_section_enter();
+    tempRevs = revs;
+    core_util_critical_section_exit();
     if (revs < 0) lead = -2;
     else lead = 2;
-    revs = abs(revs);
+    tempRevs = abs(revs);
     photoISR(); //start
-    
+    int targetRevs;
     core_util_critical_section_enter();
-    int targetRevs = revs + revsCount;
+    targetRevs = tempRevs + revsCount;
     core_util_critical_section_exit();
-    int vel =0;
-    int Kpr = 16.6;
-    int Kdr = 24;
+    
+    int velocity;
+    float Kpr = 17.2;
+    float Kdr = 26.6;
     int currRevs = 0;
     bool targetMet = false;
-    
-    while(!targetMet){
-    core_util_critical_section_enter();
-    vel = velocity;
-    currRevs = revsCount;
-    core_util_critical_section_exit();
-    
-    Tr = Kpr * (targetRevs - currRevs) - Kdr * vel; 
-    
-        pwm_out.write( (float)(std::min(Tr, 100)/100) );
-    
-        targetMet = abs(targetRevs) <= abs(currRevs);
-        }   
+    float tempTr;
+    //while(!targetMet){
+    while(1){
+        core_util_critical_section_enter();
+        velocity = vel;
+        currRevs = revsCount;
+        core_util_critical_section_exit();
+        
+        tempTr = Kpr * (targetRevs - (float)currRevs) - Kdr * (float)vel; 
+        
+        core_util_critical_section_enter();
+        Tr = tempTr;
+        core_util_critical_section_exit();
+        //float out = (float)std::min((float)Tr, (float)100.0);
+        //targetMet = abs(targetRevs) <= abs(currRevs);
+    }   
         putMessage(currRevs," --> currRevs\n\r",0);
         
     }

@@ -51,7 +51,7 @@ void setKey(string tempKey){
     iss >> newKey;
 
     NewKey_Mutex.trylock();
-    KEY = newKey;
+    *key = (uint64_t)newKey;
     NewKey_Mutex.unlock();
 
 }
@@ -94,8 +94,8 @@ void decodeSerialInput(){
         case 'R' :{
             putMessage(0, "--- IN R\n\r", 0);
             string input = command.substr(1);
-            float revs = atof(input.c_str());
-            Rotate(revs);
+            float newrevs = atof(input.c_str());
+            revs = newrevs;
             putMessage(0, "---Revs set---\n\r", 0);
             break;}
 
@@ -103,8 +103,8 @@ void decodeSerialInput(){
         case 'V' : {
             pc.printf("Finished typing");
             string input = command.substr(1);
-            int speed = atof(input.c_str());
-            set_velocity(speed);
+            float speed = atof(input.c_str());
+            glob_target_speed = speed;
             pc.printf("--Velocity set--");
             break;}
 
@@ -123,7 +123,6 @@ void decodeSerialInput(){
             break;
             }
         default : int a = 5; 
-//       throw("The fuck man?")
     }
     command = "";
     }
